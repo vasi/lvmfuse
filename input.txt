@@ -1,0 +1,234 @@
+vg_stripe {
+	id = "PC1hYN-Kq1V-dWN0-Xfbf-GLY9-h047-ePnE9Y"
+	seqno = 11
+	status = ["RESIZEABLE", "READ", "WRITE"]
+	flags = []
+	extent_size = 8192		# 4 Megabytes
+	max_lv = 0
+	max_pv = 0
+
+	physical_volumes {
+
+		pv0 {
+			id = "Kua9SK-3l5e-yuIR-4pet-q652-vqWq-t9Zhd3"
+			device = "/dev/sdc1"	# Hint only
+
+			status = ["ALLOCATABLE"]
+			flags = []
+			dev_size = 2097152	# 1024 Megabytes
+			pe_start = 384
+			pe_count = 255	# 1020 Megabytes
+		}
+
+		pv1 {
+			id = "yMaepl-9unl-a6m9-QetG-ddca-byvH-1fohDQ"
+			device = "/dev/sdc2"	# Hint only
+
+			status = ["ALLOCATABLE"]
+			flags = []
+			dev_size = 2097152	# 1024 Megabytes
+			pe_start = 384
+			pe_count = 255	# 1020 Megabytes
+		}
+
+		pv2 {
+			id = "CwS2Th-g6bb-N2P6-6vey-Brvm-j2Qq-0oWmbA"
+			device = "/dev/sdc3"	# Hint only
+
+			status = ["ALLOCATABLE"]
+			flags = []
+			dev_size = 18874368	# 9 Gigabytes
+			pe_start = 384
+			pe_count = 2303	# 8.99609 Gigabytes
+		}
+
+		pv3 {
+			id = "LcYIdj-21Cj-JH1f-mPnJ-PeKQ-NKxf-slzy3N"
+			device = "/dev/sdc4"	# Hint only
+
+			status = ["ALLOCATABLE"]
+			flags = []
+			dev_size = 18872287	# 8.99901 Gigabytes
+			pe_start = 384
+			pe_count = 2303	# 8.99609 Gigabytes
+		}
+	}
+
+	logical_volumes {
+
+		lv1 {
+			id = "KD7V44-DeAx-mQs5-rsWn-OyQV-9d7Z-EcfZOz"
+			status = ["READ", "WRITE", "VISIBLE"]
+			flags = []
+			segment_count = 1
+
+			segment1 {
+				start_extent = 0
+				extent_count = 256	# 1024 Megabytes
+
+				type = "striped"
+				stripe_count = 1	# linear
+
+				stripes = [
+					"pv2", 0
+				]
+			}
+		}
+
+		lv2 {
+			id = "8fEUeI-TIQT-3cG6-y8LV-SsP0-mlUN-FvonD1"
+			status = ["READ", "WRITE", "VISIBLE"]
+			flags = []
+			segment_count = 1
+
+			segment1 {
+				start_extent = 0
+				extent_count = 258	# 1.00781 Gigabytes
+
+				type = "striped"
+				stripe_count = 3
+				stripe_size = 128	# 64 Kilobytes
+
+				stripes = [
+					"pv0", 0,
+					"pv1", 0,
+					"pv2", 256
+				]
+			}
+		}
+
+		lv3 {
+			id = "Z9Zab0-enuH-iqFU-iYEa-QzOD-x3zP-5HX2rT"
+			status = ["READ", "WRITE", "VISIBLE"]
+			flags = []
+			segment_count = 1
+
+			segment1 {
+				start_extent = 0
+				extent_count = 256	# 1024 Megabytes
+
+				type = "mirror"
+				mirror_count = 2
+				mirror_log = "lv3_mlog"
+				region_size = 1024
+
+				mirrors = [
+					"lv3_mimage_0", 0,
+					"lv3_mimage_1", 0
+				]
+			}
+		}
+
+		lv1_snap {
+			id = "I8FtNZ-E3KU-fW0d-QCJz-5kxk-VWEU-nKssoH"
+			status = ["READ", "WRITE"]
+			flags = []
+			segment_count = 1
+
+			segment1 {
+				start_extent = 0
+				extent_count = 25	# 100 Megabytes
+
+				type = "striped"
+				stripe_count = 1	# linear
+
+				stripes = [
+					"pv0", 86
+				]
+			}
+		}
+
+		lv4 {
+			id = "6FWCkN-kIvr-dr1K-c6je-LXaA-hvtq-nWihdK"
+			status = ["READ", "WRITE", "VISIBLE"]
+			flags = []
+			segment_count = 1
+
+			segment1 {
+				start_extent = 0
+				extent_count = 512	# 2 Gigabytes
+
+				type = "striped"
+				stripe_count = 1	# linear
+
+				stripes = [
+					"pv2", 598
+				]
+			}
+		}
+
+		lv3_mlog {
+			id = "iSNF4M-vcND-TsSh-p3ms-pzG7-OX9o-03UNzE"
+			status = ["READ", "WRITE"]
+			flags = []
+			segment_count = 1
+
+			segment1 {
+				start_extent = 0
+				extent_count = 1	# 4 Megabytes
+
+				type = "striped"
+				stripe_count = 1	# linear
+
+				stripes = [
+					"pv1", 86
+				]
+			}
+		}
+
+		lv3_mimage_0 {
+			id = "EMFOUr-5WJr-SwTL-PRt8-GhBd-w8zF-H6Sy2w"
+			status = ["READ", "WRITE"]
+			flags = []
+			segment_count = 1
+
+			segment1 {
+				start_extent = 0
+				extent_count = 256	# 1024 Megabytes
+
+				type = "striped"
+				stripe_count = 1	# linear
+
+				stripes = [
+					"pv2", 342
+				]
+			}
+		}
+
+		lv3_mimage_1 {
+			id = "ZwKRmz-BuP6-izFw-VDJt-8L2t-WG0w-4d627P"
+			status = ["READ", "WRITE"]
+			flags = []
+			segment_count = 1
+
+			segment1 {
+				start_extent = 0
+				extent_count = 256	# 1024 Megabytes
+
+				type = "striped"
+				stripe_count = 1	# linear
+
+				stripes = [
+					"pv3", 0
+				]
+			}
+		}
+
+		snapshot0 {
+			id = "KPjTOe-0uKi-HX92-bBaC-tmFy-gVnJ-JkFoyQ"
+			status = ["READ", "WRITE", "VISIBLE"]
+			flags = []
+			segment_count = 1
+
+			segment1 {
+				start_extent = 0
+				extent_count = 256	# 1024 Megabytes
+
+				type = "snapshot"
+				chunk_size = 8
+				origin = "lv1"
+				cow_store = "lv1_snap"
+			}
+		}
+	}
+}
