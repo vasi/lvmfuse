@@ -2,3 +2,4 @@ lvmscan
 devices
 crc-bug
 spirit
+*.dSYM
