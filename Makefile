@@ -6,7 +6,7 @@ BOOSTINC = -I/opt/local/include
 ZLIB = -lz
 IOKIT = -framework IOKit -framework CoreFoundation
 
-PROGRAMS = spirit devices lvmscan
+PROGRAMS = spirit devices lvmscan crc-bug
 
 all: $(PROGRAMS)
 
@@ -18,6 +18,9 @@ devices: devices.cpp
 
 lvmscan: lvmscan.cpp
 	$(COMPILE) $@ $^ $(ZLIB)
+
+crc-bug: crc-bug.cpp
+	$(COMPILE) $@ $^ $(BOOSTINC) $(ZLIB)
 
 .PHONY: all clean
 
