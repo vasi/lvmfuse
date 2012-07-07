@@ -22,6 +22,9 @@ lvmscan: lvmscan.cpp
 crc-bug: crc-bug.cpp
 	$(COMPILE) $@ $^ $(BOOSTINC) $(ZLIB)
 
+qi-adapt-bug: qi-adapt-bug.cpp
+	$(COMPILE) $@ $^ $(BOOSTINC)
+
 .PHONY: all clean
 
 clean:
