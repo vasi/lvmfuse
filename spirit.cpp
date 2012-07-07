@@ -88,7 +88,7 @@ struct lvmtext_parser : qi::grammar<Iter, lvmtext_out(),
 		using phoenix::val;
 		using phoenix::construct;
 		
-		identifier %= lexeme[+(alnum | char_('_'))];
+		identifier %= lexeme[+(alnum | char_("-_.+"))];
 		integer_r %= qi::ulong_long;
 		escape_seq %= lit('\\') > (char_('\\') | char_('"'));
 		string = lexeme[*(escape_seq | (char_ - '"'))];
@@ -223,14 +223,24 @@ int main(int argc, char *argv[]) {
 	lvmfuse::lvmtext_parser<iter_t> parser;
 	lvmfuse::lvmtext_skipper<iter_t> skip;
 	
-	lvmfuse::lvmtext_out out;
 	namespace qi = boost::spirit::qi;
-	bool r = qi::phrase_parse(iter, end, parser, skip, out);
-	if (r && iter == end) {
-		lvmfuse::lvmtext_printer()(out);
-		std::cout << "\n";
+	std::string name;
+	lvmfuse::lvmtext_out desc;
+	
+	bool ok = qi::parse(iter, end,
+		parser.identifier >> *qi::space >> qi::lit('{'), name);
+	if (!ok) {
+		std::cout << "name parse failed\n";
 	} else {
-		std::cout << "parse failed\n";
+		std::cout << "name: " << name << "\n\n";
+		iter = input.begin();
+		ok = qi::phrase_parse(iter, end, parser, skip, desc);
+		if (ok && iter == end) {
+			lvmfuse::lvmtext_printer()(desc);
+			std::cout << "\n";
+		} else {
+			std::cout << "parse failed\n";
+		}
 	}
 	
 	return 0;
