@@ -71,14 +71,15 @@ struct lvmtext_skipper : qi::grammar<Iter> {
 	qi::rule<Iter> skip;
 };
 
-typedef lvmtext_keyval lvmtext_out;
+typedef lvmtext_section lvmtext_out;
 
 template <typename Iter>
 struct lvmtext_parser : qi::grammar<Iter, lvmtext_out(),
 		 lvmtext_skipper<Iter> > {
-	lvmtext_parser() : lvmtext_parser::base_type(named_section, "lvm2 text") {
+	lvmtext_parser() : lvmtext_parser::base_type(section, "lvm2 text") {
 		using qi::hold;
 		using qi::lexeme;
+		using qi::eps;
 		using qi::alnum;
 		using qi::lit;
 		using qi::space;
@@ -92,10 +93,11 @@ struct lvmtext_parser : qi::grammar<Iter, lvmtext_out(),
 		escape_seq %= lit('\\') > (char_('\\') | char_('"'));
 		string = lexeme[*(escape_seq | (char_ - '"'))];
 		quoted_string %= lit('"') > string > lit('"');
+		
 		array %= lit('[') > -(expr % ',') > lit(']');
 		keyval %= identifier >> lit('=') >> expr;
-		named_section %= identifier >> section;
-		section %= lit('{') > *(hold[keyval] | named_section) > lit('}');
+		named_section %= identifier >> lit('{') > section > lit('}');
+		section %= eps >> *(hold[keyval] | named_section);
 		expr %= integer_r | quoted_string | array;
 		
 		identifier.name("identifier");
@@ -103,27 +105,17 @@ struct lvmtext_parser : qi::grammar<Iter, lvmtext_out(),
 		escape_seq.name("escape sequence");
 		quoted_string.name("quoted string");
 		array.name("array");
-		section.name("section");
-		named_section.name("section header");
 		keyval.name("key-value pair");
+		named_section.name("named section");
+		section.name("section");
 		expr.name("expression");
-		
-		qi::on_error<qi::fail>(named_section,
-			std::cout
-				<< val("Error! Expecting ")
-				<< _4                               // what failed?
-				<< val(" here: \"")
-				<< construct<std::string>(_3, _2)   // errpos, end
-				<< val("\"")
-				<< std::endl
-		);
 	}
 	
 	qi::rule<Iter, lvmtext_t(), lvmtext_skipper<Iter> > expr;
 	qi::rule<Iter, lvmtext_array(), lvmtext_skipper<Iter> > array;
-	qi::rule<Iter, lvmtext_section(), lvmtext_skipper<Iter> > section;
-	qi::rule<Iter, lvmtext_keyval(), lvmtext_skipper<Iter> > named_section;
 	qi::rule<Iter, lvmtext_keyval(), lvmtext_skipper<Iter> > keyval;
+	qi::rule<Iter, lvmtext_keyval(), lvmtext_skipper<Iter> > named_section;
+	qi::rule<Iter, lvmtext_section(), lvmtext_skipper<Iter> > section;
 	
 	qi::rule<Iter, lvmtext_string()> identifier;
 	qi::rule<Iter, lvmtext_int()> integer_r;
@@ -235,8 +227,7 @@ int main(int argc, char *argv[]) {
 	namespace qi = boost::spirit::qi;
 	bool r = qi::phrase_parse(iter, end, parser, skip, out);
 	if (r && iter == end) {
-		using namespace lvmfuse;
-		lvmtext_print_keyval(out);
+		lvmfuse::lvmtext_printer()(out);
 		std::cout << "\n";
 	} else {
 		std::cout << "parse failed\n";
