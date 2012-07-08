@@ -72,6 +72,63 @@ struct zero : segment {
 	}
 };
 
+struct striped : segment {
+	struct source { int fd; off_t off; };
+	vector<source> sources;
+	off_t chunk_size;
+	
+	striped(args_i& iter, args_i& end) {
+		size_t stripes;
+		shift(iter, end, stripes);
+		if (stripes <= 0)
+			die("need a positive number of stripes");
+		sources.resize(stripes);
+		
+		shift(iter, end, chunk_size);
+		
+		for (int i = 0; i < stripes; ++i) {
+			string file;
+			shift(iter, end, file);
+			int fd = sources[i].fd = open(file.c_str(), O_RDONLY);
+			if (fd == -1)
+				die("can't open file in stripe");
+			shift(iter, end, sources[i].off);
+		}
+	}
+	virtual ~striped() {
+		vector<source>::iterator i = sources.begin();
+		for (; i != sources.end(); ++i)
+			close(i->fd);
+	}
+	
+	virtual int read(char *buf, size_t size, off_t offset) {
+		size_t chunk_bytes = chunk_size * Sector;
+		int bytes = 0;
+		while (size > 0 && offset < length * Sector) {
+			off_t chunk = offset / chunk_bytes;
+			size_t pos = offset % chunk_bytes;
+			source& src = sources[chunk % sources.size()];
+			
+			size_t want = chunk_bytes - pos;
+			if (want > size)
+				want = size;
+			
+			off_t stripe_chunk = chunk / sources.size();
+			off_t stripe_off = (stripe_chunk * chunk_bytes) +
+				(src.off * Sector) + pos;
+			int ret = pread(src.fd, buf, want, stripe_off);
+			if (ret <= 0)
+				return ret;
+			
+			bytes += ret;
+			buf += want;
+			offset += want;
+			size -= want;
+		}
+		return bytes;
+	}
+};
+
 
 typedef shared_ptr<segment> seg_p;
 typedef std::vector<seg_p> seg_c;
@@ -132,6 +189,8 @@ seg_p parse_segment(args_i& iter, args_i& end) {
 		p.reset(new zero(iter, end));
 	} else if (name == "error") {
 		die("error mapping unsupported due to FUSE minimum I/O size");
+	} else if (name == "striped") {
+		p.reset(new striped(iter, end));
 	} else {
 		die("no such segment type");
 	}
