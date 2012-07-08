@@ -72,6 +72,7 @@ struct zero : segment {
 	}
 };
 
+
 typedef shared_ptr<segment> seg_p;
 typedef std::vector<seg_p> seg_c;
 typedef seg_c::const_iterator seg_i;
@@ -129,6 +130,8 @@ seg_p parse_segment(args_i& iter, args_i& end) {
 		p.reset(new linear(iter, end));
 	} else if (name == "zero") {
 		p.reset(new zero(iter, end));
+	} else if (name == "error") {
+		die("error mapping unsupported due to FUSE minimum I/O size");
 	} else {
 		die("no such segment type");
 	}
