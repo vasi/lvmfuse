@@ -35,6 +35,31 @@ args_t args;
 string target("device");
 
 
+template <typename Iter>
+int readparts(Iter iter, char *buf, size_t size, off_t offset) {
+	int bytes = 0;
+	for (; size > 0 && !iter.end(); ++iter) {
+		off_t pos = offset - iter.offset();
+		size_t isize = iter.size();
+		if (pos > isize)
+			continue;
+		
+		size_t want = isize - pos;
+		if (want > size)
+			want = size;
+		
+		int ret = iter.read(buf, want, pos);
+		if (ret <= 0)
+			return ret;
+			
+		bytes += ret;
+		buf += want;
+		offset += want;
+		size -= want;
+	}
+	return bytes;
+}
+
 struct segment {
 	off_t start, length; // in sectors
 	virtual ~segment() { }
@@ -101,31 +126,25 @@ struct striped : segment {
 			close(i->fd);
 	}
 	
-	virtual int read(char *buf, size_t size, off_t offset) {
-		size_t chunk_bytes = chunk_size * Sector;
-		int bytes = 0;
-		while (size > 0 && offset < length * Sector) {
-			off_t chunk = offset / chunk_bytes;
-			size_t pos = offset % chunk_bytes;
-			source& src = sources[chunk % sources.size()];
-			
-			size_t want = chunk_bytes - pos;
-			if (want > size)
-				want = size;
-			
-			off_t stripe_chunk = chunk / sources.size();
-			off_t stripe_off = (stripe_chunk * chunk_bytes) +
-				(src.off * Sector) + pos;
-			int ret = pread(src.fd, buf, want, stripe_off);
-			if (ret <= 0)
-				return ret;
-			
-			bytes += ret;
-			buf += want;
-			offset += want;
-			size -= want;
+	struct read_iter {
+		striped& st;
+		off_t ch;
+		read_iter(striped& s, off_t c) : st(s), ch(c) { }
+		bool end() { return ch * st.chunk_size >= st.length; }
+		off_t offset() { return ch * size(); }
+		size_t size() { return st.chunk_size * Sector; }
+		int read(char *bf, size_t sz, off_t of) {
+			size_t n = st.sources.size();
+			source& sr = st.sources[ch % n];
+			return pread(sr.fd, bf, sz,
+				Sector * (ch / n * st.chunk_size + sr.off) + of);
 		}
-		return bytes;
+		read_iter& operator++() { ++ch; return *this; }
+	};
+	
+	virtual int read(char *buf, size_t size, off_t offset) {
+		return readparts(read_iter(*this, offset / Sector / chunk_size),
+			buf, size, offset);
 	}
 };
 
@@ -240,34 +259,22 @@ extern "C" int dm_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 	return 0;
 }
 
+struct seg_read_i {
+	seg_i seg, endi;
+	seg_read_i(seg_i start, seg_i end) : seg(start), endi(end) { }
+	bool end() { return seg == endi; }
+	off_t offset() { return (*seg)->start * Sector; }
+	size_t size() { return (*seg)->length * Sector; }
+	int read(char *b, size_t s, off_t o) { return (*seg)->read(b, s, o); }
+	seg_read_i& operator++() { ++seg; return *this; }
+};
 extern "C" int dm_read(const char *path, char *buf, size_t size, off_t offset,
            struct fuse_file_info *fi) {
 	if (!is_target(path))
 		return -ENOENT;
 	
-	int bytes = 0;
-	seg_i iter = segments.begin();
-	for (; size && iter != segments.end(); ++iter) {
-		off_t start = (*iter)->start * Sector,
-			end = start + (*iter)->length * Sector;
-		if (end < offset)
-			continue;
-		
-		off_t pos = offset - start;
-		size_t want = end - pos;
-		if (want > size)
-			want = size;
-		
-		int ret = (*iter)->read(buf, want, pos);
-		if (ret <= 0)
-			return ret;
-		
-		bytes += ret;
-		buf += want;
-		offset += want;
-		size -= want;
-	}
-	return bytes;
+	return readparts(seg_read_i(segments.begin(), segments.end()),
+		buf, size, offset);
 }
 
 struct fuse_operations dm_ops = {
