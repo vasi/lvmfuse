@@ -63,6 +63,15 @@ struct linear : segment {
 	}
 };
 
+struct zero : segment {
+	zero(args_i& iter, args_i& end) { }
+	
+	virtual int read(char *buf, size_t size, off_t offset) {
+		memset(buf, 0, size);
+		return size;
+	}
+};
+
 typedef shared_ptr<segment> seg_p;
 typedef std::vector<seg_p> seg_c;
 typedef seg_c::const_iterator seg_i;
@@ -90,9 +99,17 @@ off_t total_size() {
 	return (s->start + s->length) * Sector;
 }
 
-bool validate_segments() {
-	return true;
-	// FIXME
+void validate_segments() {
+	if (segments.empty())
+		die("no segments");
+	seg_i i1 = segments.begin();
+	if ((*i1)->start != 0)
+		die("First segment must have offset zero");
+	
+	for (seg_i i2 = i1 + 1; i2 != segments.end(); ++i1, ++i2) {
+		if ((*i1)->start + (*i1)->length != (*i2)->start)
+			die("Segments must be consecutive");
+	}
 }
 
 
@@ -110,6 +127,8 @@ seg_p parse_segment(args_i& iter, args_i& end) {
 	seg_p p;
 	if (name == "linear") {
 		p.reset(new linear(iter, end));
+	} else if (name == "zero") {
+		p.reset(new zero(iter, end));
 	} else {
 		die("no such segment type");
 	}
@@ -217,8 +236,7 @@ int main(int argc, char **argv) {
 	while ((seg = parse_segment(iter, end))) {
 		segments.push_back(seg);
 	}
-	if (segments.empty())
-		die("no segments");
+	validate_segments();
 	
 	return fuse_main(fargs.argc, fargs.argv, &dm_ops, NULL);
 }
