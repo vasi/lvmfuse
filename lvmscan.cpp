@@ -99,7 +99,6 @@ void read_metadata_region(std::istream& is, region* meta,
 	}
 	
 	std::cout << buf << "\n\n\n";
-	
 }
 
 void read_metadata(std::istream& is, region* meta) {
@@ -138,7 +137,7 @@ void read_metadata(std::istream& is, region* meta) {
 
 void read_pv_header(std::istream& is, const char *dev, char *buf) {
 	pv_header *pvh = reinterpret_cast<pv_header*>(buf);
-	std::cerr << dev << "UUID: " << uuid_string(pvh->uuid) << "\n\n";
+	std::cerr << dev << " UUID: " << uuid_string(pvh->uuid) << "\n";
 	swap_le(pvh->size);
 		
 	// two zero-terminated lists of data/meta areas
@@ -158,6 +157,7 @@ void read_pv_header(std::istream& is, const char *dev, char *buf) {
 			}
 		}
 	}
+//	std::cerr << dev << " data offset: " << data->offset << "\n";
 	read_metadata(is, meta);
 }
 
