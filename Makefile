@@ -2,13 +2,15 @@ CXX = clang++
 CXXFLAGS = -Wall -O0 -g
 COMPILE = $(CXX) $(CXXFLAGS) -o
 
-BOOSTINC = -I/opt/local/include
+MACPORTS = /opt/local
+BOOSTINC = -I$(MACPORTS)/include
+TOMCRYPT = -I$(MACPORTS)/include -L$(MACPORTS)/lib -ltomcrypt
 ZLIB = -lz
 IOKIT = -framework IOKit -framework CoreFoundation
 FUSE = -D_FILE_OFFSET_BITS=64 -D__FreeBSD__=10 \
-	-I/opt/local/include -L/opt/local/lib -lfuse
+	-I$(MACPORTS)/include -L$(MACPORTS)/lib -lfuse
 
-PROGRAMS = spirit devices lvmscan crc-bug dm
+PROGRAMS = spirit devices lvmscan crc-bug dm crypt
 
 all: $(PROGRAMS)
 
@@ -29,6 +31,10 @@ crc-bug: crc-bug.cpp
 
 qi-adapt-bug: qi-adapt-bug.cpp
 	$(COMPILE) $@ $^ $(BOOSTINC)
+
+crypt: crypt.cpp
+	$(COMPILE) $@ $^ $(TOMCRYPT)
+
 
 .PHONY: all clean
 

@@ -3,4 +3,5 @@ devices
 crc-bug
 spirit
 dm
+crypt
 *.dSYM
