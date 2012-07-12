@@ -2,9 +2,8 @@
 #include <cerrno>
 #include <cstdio>
 #include <cstdlib>
-#include <deque>
-#include <exception>
 #include <iostream>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -17,6 +16,7 @@
 #define FUSE_USE_VERSION 26
 #include <fuse.h>
 
+using std::map;
 using std::string;
 using std::vector;
 using boost::shared_ptr;
@@ -29,11 +29,22 @@ void shift(Iter& i, Iter& end, T& t);
 
 void die(const char *msg);
 
-typedef std::deque<string> args_t;
+typedef vector<string> args_t;
 typedef args_t::const_iterator args_i;
 args_t args;
 string target("device");
 
+
+template <typename T>
+void swap_le(T& val) {
+	T res;
+	uint8_t *byte = reinterpret_cast<uint8_t*>(&val);
+	for (int i = sizeof(T) - 1; i >= 0; --i) {
+		res <<= 8;
+		res += byte[i];
+	}
+	val = res;
+}
 
 template <typename Iter>
 int readparts(Iter iter, char *buf, size_t size, off_t offset) {
@@ -97,10 +108,31 @@ struct zero : segment {
 	}
 };
 
-struct striped : segment {
+struct chunked : segment {
+	off_t chunk_size;
+	
+	struct read_iter {
+		chunked& p;
+		off_t ch;
+		read_iter(chunked& p, off_t c) : p(p), ch(c) { }
+		bool end() { return ch * p.chunk_size >= p.length; }
+		off_t offset() { return ch * size(); }
+		size_t size() { return p.chunk_size * Sector; }
+		int read(char *buf, size_t size, off_t offset)
+			{ return p.read_one(ch, buf, size, offset); }
+		read_iter& operator++() { ++ch; return *this; }
+	};
+	
+	virtual int read_one(off_t chunk, char *buf, size_t size, off_t off) = 0;
+	virtual int read(char *buf, size_t size, off_t offset) {
+		return readparts(read_iter(*this, offset / Sector / chunk_size),
+			buf, size, offset);
+	}
+};
+
+struct striped : chunked {
 	struct source { int fd; off_t off; };
 	vector<source> sources;
-	off_t chunk_size;
 	
 	striped(args_i& iter, args_i& end) {
 		size_t stripes;
@@ -126,28 +158,101 @@ struct striped : segment {
 			close(i->fd);
 	}
 	
-	struct read_iter {
-		striped& st;
-		off_t ch;
-		read_iter(striped& s, off_t c) : st(s), ch(c) { }
-		bool end() { return ch * st.chunk_size >= st.length; }
-		off_t offset() { return ch * size(); }
-		size_t size() { return st.chunk_size * Sector; }
-		int read(char *bf, size_t sz, off_t of) {
-			size_t n = st.sources.size();
-			source& sr = st.sources[ch % n];
-			return pread(sr.fd, bf, sz,
-				Sector * (ch / n * st.chunk_size + sr.off) + of);
-		}
-		read_iter& operator++() { ++ch; return *this; }
-	};
-	
-	virtual int read(char *buf, size_t size, off_t offset) {
-		return readparts(read_iter(*this, offset / Sector / chunk_size),
-			buf, size, offset);
+	virtual int read_one(off_t chunk, char *buf, size_t size, off_t off) {
+		source& src = sources[chunk % sources.size()];
+		ssize_t bytes = pread(src.fd, buf, size,
+			Sector * (chunk / sources.size() * chunk_size + src.off) + off);
+		return (bytes == -1) ? -errno : bytes;
 	}
 };
 
+
+struct snapshot : chunked {
+	static const uint32_t Magic = 0x70416e53;
+	static const uint32_t Version = 1;
+	
+	struct cow_header {
+		uint32_t magic, valid, version, chunk_size;
+	} __attribute__((packed));
+	struct exception {
+		uint64_t chunk, content;
+	};
+	
+	int origin, cow;
+	map<off_t,off_t> exceptions;
+	
+	snapshot(args_i& iter, args_i& end) {
+		string file;
+		shift(iter, end, file);
+		if ((origin = open(file.c_str(), O_RDONLY)) == -1)
+			die("can't open snapshot origin");
+		shift(iter, end, file);
+		if ((cow = open(file.c_str(), O_RDONLY)) == -1)
+			die("can't open snapshot cow");
+		
+		++iter; // always persistent
+		shift(iter, end, chunk_size);		
+		
+		read_exception_list();
+	}
+	virtual ~snapshot() {
+		close(origin);
+		close(cow);
+	}
+	
+	void read_exception_list() {
+		char hbuf[Sector];
+		if (::read(cow, hbuf, Sector) != Sector)
+			die("can't read cow header");
+		cow_header *hdr = reinterpret_cast<cow_header*>(hbuf);
+		swap_le(hdr->magic);
+		swap_le(hdr->valid);
+		swap_le(hdr->version);
+		swap_le(hdr->chunk_size);
+		if (hdr->magic != Magic || !hdr->valid || hdr->version != Version ||
+				hdr->chunk_size != chunk_size)
+			die("bad cow header");
+		
+		size_t chunk_bytes = chunk_size * Sector; 
+		size_t ecount = chunk_bytes / sizeof(exception);
+		vector<exception> ebuf;
+		vector<exception>::iterator i = ebuf.begin();
+		
+		if (lseek(cow, chunk_bytes, SEEK_SET) == -1)
+			die("can't seek to start of exception list");
+		for (; true; ++i) {
+			if (i == ebuf.end()) {
+				if (ebuf.empty()) {
+					ebuf.resize(ecount);
+				} else {
+					if (lseek(cow, chunk_bytes * ecount, SEEK_CUR) == -1)
+						die("can't seek to next exception chunk");
+				}
+				if (::read(cow, &ebuf[0], chunk_bytes) != chunk_bytes)
+					die("can't read exception list");
+				i = ebuf.begin();
+			}
+			swap_le(i->chunk);
+			swap_le(i->content);
+			if (i->chunk == 0 && i->content == 0)
+				break;
+			exceptions[i->chunk] = i->content;
+		}
+	}
+	
+	virtual int read_one(off_t chunk, char *buf, size_t size, off_t off) {
+		map<off_t,off_t>::const_iterator i = exceptions.find(chunk);
+		int fd = origin;
+		off_t chunk_idx = chunk;
+		if (i != exceptions.end()) {
+			fd = cow;
+			chunk_idx = i->second;
+		}
+		ssize_t bytes = pread(fd, buf, size,
+			chunk_idx * chunk_size * Sector + off);
+		return (bytes == -1) ? -errno : bytes;
+	}
+};
 
 typedef shared_ptr<segment> seg_p;
 typedef std::vector<seg_p> seg_c;
@@ -210,6 +315,8 @@ seg_p parse_segment(args_i& iter, args_i& end) {
 		die("error mapping unsupported due to FUSE minimum I/O size");
 	} else if (name == "striped") {
 		p.reset(new striped(iter, end));
+	} else if (name == "snapshot") {
+		p.reset(new snapshot(iter, end));
 	} else {
 		die("no such segment type");
 	}
