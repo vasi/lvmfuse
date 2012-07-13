@@ -4,4 +4,5 @@ crc-bug
 spirit
 dm
 crypt
+luks
 *.dSYM
