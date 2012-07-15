@@ -6,4 +6,5 @@ dm
 crypt
 luks
 parse
+openssl
 *.dSYM

@@ -9,8 +9,9 @@ ZLIB = -lz
 IOKIT = -framework IOKit -framework CoreFoundation
 FUSE = -D_FILE_OFFSET_BITS=64 -D__FreeBSD__=10 \
 	-I$(MACPORTS)/include -L$(MACPORTS)/lib -lfuse
+OPENSSL = -lcrypto -Wno-deprecated-declarations
 
-PROGRAMS = spirit devices lvmscan crc-bug dm crypt luks parse
+PROGRAMS = spirit devices lvmscan crc-bug dm crypt luks parse openssl
 
 all: $(PROGRAMS)
 
@@ -40,6 +41,9 @@ crypt: crypt.cpp
 
 parse: parse.cpp
 	$(COMPILE) $@ $^
+
+openssl: openssl.cpp
+	$(COMPILE) $@ $^ $(BOOSTINC) $(OPENSSL)
 
 .PHONY: all clean
 
