@@ -3,8 +3,6 @@
 #include <string>
 #include <vector>
 
-#include <boost/lexical_cast.hpp>
-
 #include <openssl/aes.h>
 #include <openssl/sha.h>
 
@@ -12,7 +10,6 @@ using std::string;
 using std::cin;
 using std::cout;
 using std::ifstream;
-using boost::lexical_cast;
 
 typedef std::vector<uint8_t> buf_t;
 
@@ -41,6 +38,10 @@ buf_t hex2bin(const char *start, const char *end) {
 buf_t hex2bin(const string& s) {
 	const char *c = s.c_str();
 	return hex2bin(c, c + s.size());
+}
+
+uint64_t parse_int(const char *p) {
+	return strtoll(p, NULL, 0);
 }
 
 buf_t read_stream(std::istream& is) {
@@ -127,7 +128,7 @@ void aes_xts_plain64_dec(const buf_t& key, const buf_t& ct, buf_t& pt,
 
 int main(int argc, char *argv[]) {
 	buf_t key(hex2bin(argv[1]));
-	off_t sector(lexical_cast<off_t>(argv[2]));
+	uint64_t sector(parse_int(argv[2]));
 //	ifstream infile("block.dd");
 	buf_t input(read_stream(cin));
 	
