@@ -1,3 +1,4 @@
+#include <fstream>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -10,6 +11,7 @@
 using std::string;
 using std::cin;
 using std::cout;
+using std::ifstream;
 using boost::lexical_cast;
 
 typedef std::vector<uint8_t> buf_t;
@@ -41,13 +43,13 @@ buf_t hex2bin(const string& s) {
 	return hex2bin(c, c + s.size());
 }
 
-buf_t read_stdin() {
+buf_t read_stream(std::istream& is) {
 	buf_t r;
 	while (true) {
 		size_t off = r.size();
 		r.resize(off + Sector);
-		cin.read((char*)&r[off], Sector);
-		size_t count = cin.gcount();
+		is.read((char*)&r[off], Sector);
+		size_t count = is.gcount();
 		if (count < Sector) {
 			r.resize(off + count);
 			return r;
@@ -81,14 +83,56 @@ void aes_cbc_essiv_sha256_dec(const buf_t& key, const buf_t& ct, buf_t& pt,
 	AES_cbc_encrypt(&ct[0], &pt[0], ct.size(), &blockkey, &iv[0], false);
 }
 
+void bufxor(buf_t& dest, const buf_t& arg) {
+	for (size_t i = 0; i < dest.size() && i < arg.size(); ++i)
+		dest[i] ^= arg[i];
+}
+
+void tweak_mult(buf_t& t) {
+	int i = t.size() - 1;
+	bool carry = !!(t[i] & 0x80);
+	for (; i > 0; --i)
+		t[i] = (t[i] << 1) + (t[i-1] >> 7);
+	t[0] = (t[0] << 1) ^ (0x87 * carry);
+}
+
+void aes_xts_plain64_dec(const buf_t& key, const buf_t& ct, buf_t& pt,
+		uint64_t sector) {
+	size_t klen = key.size() / 2;
+	buf_t k1(&key[0], &key[klen]), k2(&key[klen], &key[key.size()]);
+	
+	// Initialize the tweak
+	buf_t tweak(AES_BLOCK_SIZE);
+	store64le(sector, &tweak[0]);
+	AES_KEY tweakkey;
+	AES_set_encrypt_key(&k2[0], k2.size() * 8, &tweakkey);
+	AES_encrypt(&tweak[0], &tweak[0], &tweakkey);
+	
+	// Decrypt each block
+	pt.resize(ct.size());
+	AES_KEY blockkey;
+	AES_set_decrypt_key(&k1[0], k1.size() * 8, &blockkey);
+	buf_t block(AES_BLOCK_SIZE);
+	for (size_t i = 0; i < ct.size(); i += AES_BLOCK_SIZE) {
+		memcpy(&block[0], &ct[i], AES_BLOCK_SIZE);
+		bufxor(block, tweak);
+		AES_decrypt(&block[0], &block[0], &blockkey);
+		bufxor(block, tweak);
+		memcpy(&pt[i], &block[0], AES_BLOCK_SIZE);
+		
+		tweak_mult(tweak);
+		// FIXME: Ciphertext stealing
+	}
+}
 
 int main(int argc, char *argv[]) {
 	buf_t key(hex2bin(argv[1]));
 	off_t sector(lexical_cast<off_t>(argv[2]));
-	buf_t input(read_stdin());
+//	ifstream infile("block.dd");
+	buf_t input(read_stream(cin));
 	
 	buf_t output;
-	aes_cbc_essiv_sha256_dec(key, input, output, sector);
+	aes_xts_plain64_dec(key, input, output, sector);
 	
 	cout.write((char*)&output[0], output.size());
 	return 0;
