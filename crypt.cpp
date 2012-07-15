@@ -3,10 +3,12 @@
 #include <cstdio>
 #include <fstream>
 #include <string>
+#include <vector>
 
 #include <boost/lexical_cast.hpp>
 
 using std::string;
+using std::vector;
 using boost::lexical_cast;
 
 uint8_t hexval(char c) {
@@ -56,6 +58,13 @@ void aes_cbc_essiv_sha256(const string& key, uint64_t sector,
 	cbc_decrypt(ct, pt, 512, &cbc);
 }
 
+string slurp(const char *file) {
+	std::ifstream input(file);
+	std::stringstream ss;
+	ss << input.rdbuf();
+	return ss.str();
+}
+
 int main(int argc, char *argv[]) {
 	char *keyhex = argv[1];
 	size_t hexlen = strlen(keyhex);
@@ -67,12 +76,12 @@ int main(int argc, char *argv[]) {
 	
 	uint64_t sector = lexical_cast<uint64_t>(argv[2]);
 	
-	uint8_t ct[512], pt[512];
-	std::ifstream block("block.dd");
-	block.read((char*)ct, 512);
+	string str(slurp("block.dd"));
+	vector<uint8_t> ct(str.begin(), str.end());
+	vector<uint8_t> pt(str.size());
 	
-	aes_cbc_essiv_sha256(key, sector, ct, pt);
+	aes_xts_plain64(key, sector, &ct[0], &pt[0]);
 	
-	fwrite(pt, 512, 1, stdout);
+	fwrite(&pt[0], pt.size(), 1, stdout);
 	return 0;
 }
