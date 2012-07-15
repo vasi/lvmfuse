@@ -10,7 +10,7 @@ IOKIT = -framework IOKit -framework CoreFoundation
 FUSE = -D_FILE_OFFSET_BITS=64 -D__FreeBSD__=10 \
 	-I$(MACPORTS)/include -L$(MACPORTS)/lib -lfuse
 
-PROGRAMS = spirit devices lvmscan crc-bug dm crypt luks
+PROGRAMS = spirit devices lvmscan crc-bug dm crypt luks parse
 
 all: $(PROGRAMS)
 
@@ -38,6 +38,8 @@ qi-adapt-bug: qi-adapt-bug.cpp
 crypt: crypt.cpp
 	$(COMPILE) $@ $^ $(TOMCRYPT)
 
+parse: parse.cpp
+	$(COMPILE) $@ $^
 
 .PHONY: all clean
 

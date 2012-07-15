@@ -5,4 +5,5 @@ spirit
 dm
 crypt
 luks
+parse
 *.dSYM
