@@ -6,10 +6,10 @@ PROGRAMS = test
 
 all: $(PROGRAMS)
 
-test: test.o dm/target-file.o
+test: test.o dm/target-file.o dm/target-linear.o
 	$(CXX) $(LDFLAGS) -o $@ $^
 
-%.o: %.cpp
+%.o: %.cpp include/*.hpp
 	$(CXX) $(CXXFLAGS) $(OPT) -o $@ -c $<
 
 clean:

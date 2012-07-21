@@ -5,9 +5,10 @@
 
 namespace devmapper {
 
-namespace target {
+namespace targets {
 
-file::file(const char *name) : fd(open(name, O_RDONLY)) { }
+file::file(const char *name)
+	: fd(open(name, O_RDONLY)) { }
 
 file::~file() {
 	close(fd);
@@ -23,4 +24,4 @@ int file::read(off_t block, uint8_t *buf) {
 		return bytes;
 }
 
-} } // devmapper::target
+} } // devmapper::targets
