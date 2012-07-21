@@ -1,5 +1,11 @@
-#include <iostream>
+#include <dm.hpp>
+using namespace devmapper;
 
-int main() {
-	std::cout << "hello!\n";
+#include <unistd.h>
+
+int main(int argc, char *argv[]) {
+	uint8_t buf[BlockSize];
+	target::file ft(argv[1]);
+	ft.read(0, buf);
+	write(STDOUT_FILENO, buf, BlockSize);
 }
