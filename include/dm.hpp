@@ -1,14 +1,16 @@
-#include <vector>
+#ifndef DM_HPP
+#define DM_HPP
 
-#include <tr1/memory>
-#define SHARED_PTR std::tr1::shared_ptr
+#include "common.hpp"
+
+#include <vector>
 
 namespace devmapper {
 
-const size_t BlockSize = 512;
-
 struct target {
 	typedef SHARED_PTR<target> ptr;
+	
+	// FIXME: init() method to check for errs?
 	
 	virtual ~target() { }
 	virtual int read(off_t block, uint8_t *buf) = 0;
@@ -19,11 +21,13 @@ namespace targets {
 
 struct file : public target {
 	file(const char *name);
+	file(int fd, bool cleanup = true);
 	virtual ~file();
 	virtual int read(off_t block, uint8_t *buf);
 	
 private:
 	int fd;
+	bool cleanup;
 };
 
 
@@ -39,3 +43,5 @@ private:
 } // target
 
 } // devmapper
+
+#endif // DM_HPP

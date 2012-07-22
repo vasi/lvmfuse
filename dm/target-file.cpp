@@ -1,4 +1,4 @@
-#include <dm.hpp>
+#include "dm.hpp"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -8,10 +8,14 @@ namespace devmapper {
 namespace targets {
 
 file::file(const char *name)
-	: fd(open(name, O_RDONLY)) { }
+	: fd(open(name, O_RDONLY)), cleanup(true) { }
+
+file::file(int fd, bool cleanup)
+	: fd(fd), cleanup(cleanup) { }
 
 file::~file() {
-	close(fd);
+	if (cleanup)
+		close(fd);
 }
 
 int file::read(off_t block, uint8_t *buf) {
@@ -21,7 +25,7 @@ int file::read(off_t block, uint8_t *buf) {
 	else if (bytes != BlockSize)
 		return EIO;
 	else
-		return bytes;
+		return 0;
 }
 
 } } // devmapper::targets
