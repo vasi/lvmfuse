@@ -233,5 +233,4 @@ devmapper::target::ptr pvdevice::target() {
 	return target::ptr(new targets::file(dup(fd)));
 }
 
-
-} // lvm
+} // namespace lvm

@@ -11,4 +11,4 @@ int linear::read(off_t block, uint8_t *buf) {
 	return source->read(block + offset, buf);
 }
 
-} } // devmapper::targets
+} } // namespace devmapper::targets

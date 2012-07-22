@@ -40,8 +40,6 @@ private:
 	off_t offset;
 };
 
-} // target
-
-} // devmapper
+} } // namespace devmapper::targets
 
 #endif // DM_HPP

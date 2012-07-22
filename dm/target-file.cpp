@@ -28,4 +28,4 @@ int file::read(off_t block, uint8_t *buf) {
 		return 0;
 }
 
-} } // devmapper::targets
+} } // namespace devmapper::targets

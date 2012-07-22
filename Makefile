@@ -5,9 +5,12 @@ OPT = -O0 -g
 
 PROGRAMS = test
 
+OBJECTS = test.o dm/target-file.o dm/target-linear.o lvm/pvdevice.o \
+	lvm/text.o
+
 all: $(PROGRAMS)
 
-test: test.o dm/target-file.o dm/target-linear.o lvm/pvdevice.o
+test: $(OBJECTS)
 	$(CXX) $(LDFLAGS) -o $@ $^
 
 %.o: %.cpp include/*.hpp

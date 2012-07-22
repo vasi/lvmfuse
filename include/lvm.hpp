@@ -37,6 +37,6 @@ private:
 	uint32_t text_crc32;
 };
 
-};
+} // namespace lvm
 
 #endif // LVM_HPP

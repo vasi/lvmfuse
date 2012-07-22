@@ -5,6 +5,7 @@
 
 #include <tr1/memory>
 #define SHARED_PTR std::tr1::shared_ptr
+#define DYPTR_CAST std::tr1::dynamic_pointer_cast
 
 namespace devmapper {
 
@@ -21,6 +22,6 @@ void swap_le(T& val) {
 	val = res;
 }
 
-} // devmapper
+} // namespace devmapper
 
 #endif // COMMON_HPP
