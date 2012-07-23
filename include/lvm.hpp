@@ -3,33 +3,31 @@
 
 #include "dm.hpp"
 
+#include <fstream>
+#include <stdexcept>
 #include <string>
 
 namespace lvm {
 
 struct pvdevice {
-	enum error {
-		NoError = 0,
-		IOError,
-		MagicError,
-		CRCError,
-		FormatError,
+	struct exception : public std::runtime_error {
+		exception(const std::string& msg) : std::runtime_error(msg) { }
 	};
 	
-	error init(const char *name);
-	~pvdevice();
+	pvdevice();
+	pvdevice(const char *name);
+	void open(const char *name);
 	
 	std::string uuid() { return m_uuid; }
-	error vg_config(std::string& s);
+	std::string vg_config();
 	devmapper::target::ptr target();
 	
 private:
-	error scan_label();
-	error read_label(size_t sector, uint8_t *buf);
-	error read_header(uint8_t *buf, size_t size);
-	error read_md_area(off_t off, size_t size);
+	bool read_label(size_t sector, uint8_t *buf);
+	void read_header(uint8_t *buf, size_t size);
+	void read_md_area(off_t off, size_t size);
 	
-	int fd;
+	devmapper::filedesc fd;
 	std::string m_uuid;
 	
 	off_t text_offset;

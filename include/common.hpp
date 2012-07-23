@@ -1,6 +1,7 @@
 #ifndef COMMON_HPP
 #define COMMON_HPP
 
+#include <stdexcept>
 #include <vector>
 
 #include <tr1/memory>
@@ -21,6 +22,27 @@ void swap_le(T& val) {
 	}
 	val = res;
 }
+
+struct filedesc {
+	struct exception : public std::runtime_error {
+		exception(const std::string& msg) : std::runtime_error(msg) { }
+	};
+	
+	filedesc();
+	filedesc(const char *path);
+	~filedesc();
+	
+	bool is_open() const;
+	void open(const char *path);
+	void close();
+	
+	void read(uint8_t *buf, size_t size);
+	void pread(uint8_t *buf, size_t size, off_t offset);
+	int dup();
+	
+private:
+	int m_fd;
+};
 
 } // namespace devmapper
 

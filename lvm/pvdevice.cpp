@@ -13,7 +13,8 @@ using devmapper::swap_le;
 
 namespace lvm {
 
-namespace pvdev {
+/***** Constants and types for PV on-disk format *****/
+namespace pvdisk {
 static const size_t LabelSectors = 4; // how many sectors to check? 
 static const char* LabelMagic = "LABELONE";
 static const char* LabelType = "LVM2 001"; // LVM2 text format
@@ -53,14 +54,18 @@ struct md_region {
 	uint32_t crc32;
 	uint32_t flags;
 } __attribute__((packed));
-} // namespace pvdev
-using namespace pvdev;
+} // namespace pvdisk
+using namespace pvdisk;
 
 
+/***** Utility functions *****/
+
+// Check if a magic value is matched 
 static bool magic(const char *want, const char *have) {
 	return strncmp(want, have, strlen(want)) == 0;
 }
 
+// Calculate a CRC32 checksum
 static uint32_t crc(const uint8_t *p, size_t size) {
 	// zlib CRC32 does pre-/post-xor, undo it
 	const uint32_t CRCInitialRemainder = 0xf597a6cf;
@@ -68,6 +73,7 @@ static uint32_t crc(const uint8_t *p, size_t size) {
 		^ 0xFFFFFFFF;
 }
 
+// Turn a raw UUID buffer into its string representation
 static string uuid_string(const char *uuid) {
 	string s;
 	int groups[] = { 6, 4, 4, 4, 4, 4, 6 };
@@ -82,61 +88,54 @@ static string uuid_string(const char *uuid) {
 	return s;
 }
 
-static pvdevice::error errlog(pvdevice::error err, const char *msg) {
-	fprintf(stderr, "%s\n", msg);
-	return err;
-}
 
+/***** Methods *****/
 
-pvdevice::error pvdevice::init(const char *name) {
-	if ((fd = open(name, O_RDONLY)) == -1)
-		return IOError;
-	return scan_label();
-}
+pvdevice::pvdevice() { }
+pvdevice::pvdevice(const char *name) { open(name); }
 
-pvdevice::error pvdevice::scan_label() {
+void pvdevice::open(const char *name) {
+	fd.open(name);
 	uint8_t buf[BlockSize];
-	error err = MagicError;
 	for (size_t sector = 0; sector < LabelSectors; ++sector) {
-		if (read(fd, buf, BlockSize) != BlockSize)
-			return errlog(IOError, "Can't read LVM2 label");
-		err = read_label(sector, buf);
-		if (err == NoError)
-			return err;
+		fd.read(buf, BlockSize);
+		if (read_label(sector, buf))
+			return;
 	}
-	return errlog(err, "Can't find a valid LVM2 label");
+	throw exception("Can't find an LVM2 label");
 }
 		
-pvdevice::error pvdevice::read_label(size_t sector, uint8_t *buf) {
+bool pvdevice::read_label(size_t sector, uint8_t *buf) {
 	label *lab(reinterpret_cast<label*>(buf));
 	if (!magic(LabelMagic, lab->magic))
-		return MagicError;
+		return false;
 	if (!magic(LabelType, lab->type))
-		return errlog(MagicError, "LVM2 label has bad type");
+		return false;
+	
 	swap_le(lab->this_sector_idx);
 	if (lab->this_sector_idx != sector)
-		return errlog(MagicError, "LVM2 label on wrong sector");
+		throw exception("LVM2 label on wrong sector");
 		
 	swap_le(lab->crc32);
 	uint8_t *crc_start = reinterpret_cast<uint8_t*>(&lab->contents_offset);
 	if (crc(crc_start, BlockSize - (crc_start - buf)) != lab->crc32)
-		return errlog(CRCError, "LVM2 label has bad CRC");
-		
+		throw exception("LVM2 label has bad CRC");
+	
 	swap_le(lab->contents_offset);
 	if (lab->contents_offset > BlockSize)
-		return errlog(FormatError, "LVM2 label must fit on one sector");
-	return read_header(buf + lab->contents_offset,
-		BlockSize - lab->contents_offset);
+		throw exception("LVM2 label doesn't fit on one sector");
+	
+	read_header(buf + lab->contents_offset, BlockSize - lab->contents_offset);
+	return true;
 }
 
-pvdevice::error pvdevice::read_header(uint8_t *buf, size_t size) {
+void pvdevice::read_header(uint8_t *buf, size_t size) {
 	header *hdr = reinterpret_cast<header*>(buf);
 	if (size < sizeof(*hdr))
-		return errlog(FormatError, "PV header must be on LVM2 label's sector");
+		throw exception("PV header must be on LVM2 label's sector");
 	m_uuid = uuid_string(hdr->uuid);
 	
-	bool md = false;
-	error err = FormatError;
+	bool md = false; // Data or metadata list?
 	for (region *rgn = reinterpret_cast<region*>(buf + sizeof(*hdr));
 			reinterpret_cast<uint8_t*>(rgn) + sizeof(*rgn) <= buf + size;
 			++rgn) {
@@ -144,42 +143,40 @@ pvdevice::error pvdevice::read_header(uint8_t *buf, size_t size) {
 		swap_le(rgn->size);
 		bool zero = rgn->offset == 0 && rgn->size == 0;
 		if (md && zero)
-			break;
+			break;			// Out of metadata items
 		else if (zero)
-			md = true;
+			md = true;		// Switch to metadata list
 		else if (md) {
-			// Can there be multiple valid regions?
-			err = read_md_area(rgn->offset, rgn->size);
-			if (err == NoError)
-				return err;
+			// Found one! (Can there be multiple valid regions?)
+			read_md_area(rgn->offset, rgn->size);
+			return;
 		}
 	}
-	return errlog(err, "No valid LVM2 metadata region found");;
+	throw exception("No valid LVM2 metadata region found");;
 }
 
-pvdevice::error pvdevice::read_md_area(off_t off, size_t size) {	
+void pvdevice::read_md_area(off_t off, size_t size) {	
 	if (size < BlockSize)
-		return errlog(FormatError, "LVM2 metadata header too small");
+		throw exception("LVM2 metadata header too small");
 	uint8_t buf[BlockSize];
-	if (pread(fd, buf, BlockSize, off) != BlockSize)
-		return errlog(IOError, "Can't read LVM2 metadata header");
+	fd.pread(buf, BlockSize, off);
 	
 	md_header *hdr(reinterpret_cast<md_header*>(buf));
 	if (!magic(MetadataMagic, hdr->magic))
-		return errlog(MagicError, "LVM2 metadata header has bad magic");
+		throw exception("LVM2 metadata header has bad magic");
 	swap_le(hdr->version);
 	if (hdr->version != MetadataVersion)
-		return errlog(MagicError, "LVM2 metadata header has bad version");
+		throw exception("LVM2 metadata header has bad version");
 	swap_le(hdr->size);
 	if (hdr->size != size)
-		return errlog(FormatError, "LVM2 metadata header has bad size");
+		throw exception("LVM2 metadata header has bad size");
 	swap_le(hdr->this_offset);
 	if (hdr->this_offset != off)
-		return errlog(FormatError, "LVM2 metadata header has bad offset");
+		throw exception("LVM2 metadata header has bad offset");
 	swap_le(hdr->crc32);
 	size_t crc_size = sizeof(hdr->crc32);
 	if (hdr->crc32 != crc(buf + crc_size, BlockSize - crc_size))
-		return errlog(CRCError, "LVM2 metadata header has bad CRC");
+		throw exception("LVM2 metadata header has bad CRC");
 	
 	for (md_region *rgn = reinterpret_cast<md_region*>(buf + sizeof(md_header));
 			reinterpret_cast<uint8_t*>(rgn) + sizeof(*rgn) <= buf + size;
@@ -187,7 +184,7 @@ pvdevice::error pvdevice::read_md_area(off_t off, size_t size) {
 		swap_le(rgn->offset);
 		swap_le(rgn->size);
 		if (rgn->offset == 0 && rgn->size == 0)
-			break;
+			break;	// Out of regions
 		swap_le(rgn->flags);
 		if (rgn->flags & FlagIgnore)
 			continue;
@@ -196,18 +193,14 @@ pvdevice::error pvdevice::read_md_area(off_t off, size_t size) {
 		text_offset = off + rgn->offset;
 		text_size = rgn->size;
 		text_crc32 = rgn->crc32;
-		return NoError;
+		return;
 		// Possible to have multiple valid regions?
 	}
-	return errlog(FormatError, "No valid LVM2 metadata regions");
+	throw exception("No valid LVM2 metadata regions");
 }
 
-pvdevice::~pvdevice() {
-	close(fd);
-}
-
-pvdevice::error pvdevice::vg_config(string& s) {
-	s.clear();
+std::string pvdevice::vg_config() {
+	std::string s;
 	s.reserve(text_size);
 	
 	uint8_t buf[BlockSize];
@@ -216,21 +209,20 @@ pvdevice::error pvdevice::vg_config(string& s) {
 		size_t want = end - off;
 		if (want > BlockSize)
 			want = BlockSize;
-		if (pread(fd, buf, want, off) != want)
-			return errlog(IOError, "Can't read LVM2 VG configuration");
+		fd.pread(buf, want, off);
 		s.append(reinterpret_cast<char*>(buf), want);
 		off += want;
 	}
 	
-	const uint8_t *data = reinterpret_cast<const uint8_t*>(s.c_str());
-	if (text_crc32 != crc(data, s.size()))
-		return errlog(CRCError, "LVM2 VG configuration fails CRC check");
-	return NoError;
+	const uint8_t *cstr = reinterpret_cast<const uint8_t*>(s.c_str());
+	if (text_crc32 != crc(cstr, s.size()))
+		throw exception("LVM2 VG configuration fails CRC check");
+	return s;
 }
 
 devmapper::target::ptr pvdevice::target() {
 	using namespace devmapper;
-	return target::ptr(new targets::file(dup(fd)));
+	return target::ptr(new targets::file(fd.dup()));
 }
 
 } // namespace lvm

@@ -5,8 +5,8 @@ OPT = -O0 -g
 
 PROGRAMS = test
 
-OBJECTS = test.o dm/target-file.o dm/target-linear.o lvm/pvdevice.o \
-	lvm/text.o
+OBJECTS = test.o dm/target-file.o dm/target-linear.o dm/filedesc.o \
+	lvm/pvdevice.o lvm/text.o
 
 all: $(PROGRAMS)
 

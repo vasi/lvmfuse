@@ -5,10 +5,14 @@
 
 int main(int argc, char *argv[]) {
 	lvm::pvdevice pv;
-	pv.init(argv[1]);
 	std::string conftext;
-	if (pv.vg_config(conftext) != lvm::pvdevice::NoError)
+	try {
+		pv.open(argv[1]);
+		conftext = pv.vg_config();
+	} catch (std::exception& e) {
+		std::cerr << e.what() << "\n";
 		return -1;
+	}
 	
 	lvm::text::section_p config;
 	lvm::text::parser parser(conftext);
