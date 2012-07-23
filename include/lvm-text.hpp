@@ -3,38 +3,39 @@
 
 #include "lvm-text-value.hpp"
 
+#include <stdexcept>
 #include <iostream>
 
 namespace lvm {
 namespace text {
 
 struct parser {
+	struct exception : public std::runtime_error {
+		exception(const std::string& msg) : std::runtime_error(msg) { }
+	};
+	
 	parser(const std::string& s) : str(s), pos(s.c_str()) { }
 	
-	enum status { Ok, Continue, Error };
 	enum advance { Advance, Remain };
 	
 	void skip();
 	bool eof();
 	bool literal(char c, advance a = Advance);
-	bool identifier(std::string& s);
+	void identifier(std::string& s);
 	
-	status integer(int& i);
-	status string(std::string& s);
-	status array(array_p& a);
-	bool section(section_p& m);
+	bool integer(int& i);
+	bool string(std::string& s);
+	bool array(array_p& a);
+	void section(section_p& m);
 	
-	bool value(struct value& v);
+	void value(struct value& v);
 	
-	bool vg_config(section_p& m);
-	bool vg_name(std::string& s);
-	
-	const std::string& error() const { return err; }
+	section_p vg_config();
+	std::string vg_name();
 	
 private:
 	const std::string& str;
 	const char *pos;
-	std::string err;
 };
 
 struct dumper {

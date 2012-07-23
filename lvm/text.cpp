@@ -52,152 +52,125 @@ bool parser::literal(char c, advance a) {
 	return true;
 }
 
-bool parser::identifier(std::string& s) {
+void parser::identifier(std::string& s) {
 	skip();
 	s.clear();
 	while (*pos && (isalnum(*pos) || strchr("-_.+", *pos)))
 		s.push_back(*pos++);
 	
 	if (s.empty())
-		err = "expected identifier";
-	return !s.empty();
+		throw exception("expected identifier");
 }
 	
-parser::status parser::integer(int& i) {
+bool parser::integer(int& i) {
 	skip();
 	if (!isdigit(*pos))
-		return Continue;
+		return false;
 	
 	i = 0;
 	while (*pos && isdigit(*pos))
 		i = 10 * i + *pos++ - '0';
-	return Ok;
+	return true;
 }
 
-parser::status parser::string(std::string& s) {
+bool parser::string(std::string& s) {
 	if (!literal('"'))
-		return Continue;
+		return false;
 	
 	s.clear();
 	for (; *pos && *pos != '"'; ++pos) {
 		char c = *pos;
 		if (c == '\\') {
 			c = *(pos + 1);
-			if (c != '\\' && c != '"') {
-				err = "unknown escape";
-				return Error;
-			}
+			if (c != '\\' && c != '"')
+				throw exception("unknown escape");
 			++pos;
 		}
 		s.push_back(c);
 	}
 	
-	if (*pos != '"') {
-		err = "expected terminating quote";
-		return Error;
-	}
+	if (*pos != '"')
+		throw exception("expected terminating quote");
 	++pos;
 	
-	return Ok;
+	return true;
 }
 
-parser::status parser::array(array_p& a) {
+bool parser::array(array_p& a) {
 	if (!literal('['))
-		return Continue;
+		return false;
 	
 	struct value v;
 	a.reset(new array_t());
 	while (true) {
 		if (literal(']'))
-			return Ok;
+			return true;
 		
-		if (!a->empty() && !literal(',')) {
-			err = "expected array separator";
-			return Error;
-		}
+		if (!a->empty() && !literal(','))
+			throw exception("expected array separator");
 		
-		if (!value(v))
-			return Error;
+		value(v);
 		a->push_back(v);
 	}
 }
 
-bool parser::section(section_p& m) {
+void parser::section(section_p& m) {
 	std::string id;
 	struct value v;
 	m.reset(new section_t());
-	while (true) {
-		if (literal('}', Remain) || eof())
-			return true;
-		
-		if (!identifier(id))
-			return false;
+	while (!literal('}', Remain) && !eof()) {
+		identifier(id);
 		if (literal('=')) {
-			if (!value(v))
-				return false;
+			value(v);
 		} else if (literal('{')) {
 			section_p sub;
-			if (!section(sub))
-				return false;
-			if (!literal('}')) {
-				err = "expected closing brace";
-				return false;
-			}
+			section(sub);
+			if (!literal('}'))
+				throw exception("expected closing brace");
 			v.set(value::Section, new section_core(sub));
 		} else {
-			err = "expected equals sign or opening brace";
-			return false;
+			throw exception("expected equals sign or opening brace");
 		}
 		(*m)[id] = v;
 	}
 }
 
-bool parser::value(struct value& v) {
+void parser::value(struct value& v) {
 	int i;
-	status st = integer(i); // Can't be Error
-	if (st == Ok) {
+	if (integer(i)) {
 		v.set(value::Integer, new integer_core(i));
-		return true;
+		return;
 	}
 	
 	std::string s;
-	st = string(s);
-	if (st == Error)
-		return false;
-	if (st == Ok) {
+	if (string(s)) {
 		v.set(value::String, new string_core(s));
-		return true;
+		return;
 	}
 	
 	array_p a;
-	st = array(a);
-	if (st == Error)
-		return false;
-	if (st == Ok) {
+	if (array(a)) {
 		v.set(value::Array, new array_core(a));
-		return true;
+		return;
 	}
 	
-	err = "expected a value";
-	return false;
+	throw exception("expected a value");
 }
 	
-bool parser::vg_config(section_p& m) {
-	if (!section(m))
-		return false;
-	if (eof())
-		return true;
-	err = "expected end of file";
-	return false;
+section_p parser::vg_config() {
+	section_p m;
+	section(m);
+	if (!eof())
+		throw exception("expected end of file");
+	return m;
 }
 
-bool parser::vg_name(std::string& s) {
-	if (!identifier(s))
-		return false;
-	if (literal('{'))
-		return true;
-	err = "expected opening brace";
-	return false;
+std::string parser::vg_name() {
+	std::string s;
+	identifier(s);
+	if (!literal('{'))
+		throw exception("expected opening brace");
+	return s;
 }
 
 void dumper::tab() {
