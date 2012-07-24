@@ -18,14 +18,14 @@ file::~file() {
 		close(fd);
 }
 
-int file::read(off_t block, uint8_t *buf) {
-	ssize_t bytes = pread(fd, &buf[0], BlockSize, BlockSize * block);
+int file::read(off_t block, uint8_t *buf, size_t offset, size_t size) {
+	ssize_t bytes = pread(fd, &buf[0], size, BlockSize * block + offset);
 	if (bytes == -1)
-		return errno;
-	else if (bytes != BlockSize)
-		return EIO;
+		return -errno;
+	else if (bytes != size)
+		return -EIO;
 	else
-		return 0;
+		return size;
 }
 
 } } // namespace devmapper::targets

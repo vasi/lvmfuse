@@ -10,11 +10,13 @@ namespace devmapper {
 struct target {
 	typedef SHARED_PTR<target> ptr;
 	
-	// FIXME: init() method to check for errs?
+	// FIXME: Error checking??
 	
 	virtual ~target() { }
-	virtual int read(off_t block, uint8_t *buf) = 0;
+	virtual int read(off_t block, uint8_t *buf, size_t offset, size_t size) = 0;
 };
+
+void fuse_serve(const char *path, target& tgt, size_t size);
 
 
 namespace targets {
@@ -23,7 +25,7 @@ struct file : public target {
 	file(const char *name);
 	file(int fd, bool cleanup = true);
 	virtual ~file();
-	virtual int read(off_t block, uint8_t *buf);
+	virtual int read(off_t block, uint8_t *buf, size_t offset, size_t size);
 	
 private:
 	int fd;
@@ -33,11 +35,11 @@ private:
 
 struct linear : public target {
 	linear(target::ptr src, off_t off);	
-	virtual int read(off_t block, uint8_t *buf);
+	virtual int read(off_t block, uint8_t *buf, size_t offset, size_t size);
 
 private:
 	target::ptr source;
-	off_t offset;
+	off_t src_offset;
 };
 
 } } // namespace devmapper::targets

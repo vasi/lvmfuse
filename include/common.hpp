@@ -23,6 +23,8 @@ void swap_le(T& val) {
 	val = res;
 }
 
+bool parse_int(const std::string& s, int& i);
+
 struct filedesc {
 	struct exception : public std::runtime_error {
 		exception(const std::string& msg) : std::runtime_error(msg) { }
