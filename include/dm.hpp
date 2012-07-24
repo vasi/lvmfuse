@@ -10,9 +10,10 @@ namespace devmapper {
 struct target {
 	typedef SHARED_PTR<target> ptr;
 	
-	// FIXME: Error checking??
-	
 	virtual ~target() { }
+	
+	// 'size' is limited to BlockSize
+	// Return as in FUSE: Negative errno on error, or non-negative bytes read
 	virtual int read(off_t block, uint8_t *buf, size_t offset, size_t size) = 0;
 };
 
