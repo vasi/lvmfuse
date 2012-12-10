@@ -45,6 +45,7 @@ struct value {
 	std::string& string() const;
 	array_t& array() const;
 	section_t& section() const;
+	value& operator[](const std::string& key) const;
 	
 	void set(vtype t, value_core *i);
 

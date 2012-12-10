@@ -5,20 +5,32 @@
 namespace lvm {
 namespace text {
 
+template <typename T>
+static SHARED_PTR<T> safe_cast(const SHARED_PTR<value_core> b) {
+	SHARED_PTR<T> d = DYPTR_CAST<T>(b);
+	if (d)
+		return d;
+	throw std::bad_cast();
+}
+
 int value::integer() const {
-	return DYPTR_CAST<integer_core>(inner)->i;
+	return safe_cast<integer_core>(inner)->i;
 }
 
 std::string& value::string() const {
-	return DYPTR_CAST<string_core>(inner)->s;
+	return safe_cast<string_core>(inner)->s;
 }
 
 array_t& value::array() const {
-	return *DYPTR_CAST<array_core>(inner)->a;
+	return *safe_cast<array_core>(inner)->a;
 }
 
 section_t& value::section() const {
-	return *DYPTR_CAST<section_core>(inner)->m;
+	return *safe_cast<section_core>(inner)->m;
+}
+
+value& value::operator[](const std::string& key) const {
+	return section()[key];
 }
 
 void value::set(vtype t, value_core *i) {
